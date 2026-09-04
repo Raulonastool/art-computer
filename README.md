@@ -105,6 +105,19 @@ Everything, and nothing else:
 
 Nothing under `/usr/share/omarchy` is written.
 
+One more file is touched later, not at install time. Every piece is a brand-new
+directory, and a coding agent meeting a directory for the first time stops to ask
+whether it is trusted — so `art make` would end its first run on a modal dialog
+that defaults to *no*. When your default agent is Claude Code, `art` records that
+consent for you in `~/.claude.json`, for that one piece directory. It only ever
+marks a directory that sits directly inside `~/Art` and carries an `art.json` —
+that is, one `art` made itself, a second ago, because you asked it to. Nothing
+else is trusted on your behalf, and no other setting is changed.
+
+```bash
+ART_NO_TRUST=1 art make "..."   # keep the prompt
+```
+
 ```bash
 ./uninstall.sh            # removes all of the above
 ./uninstall.sh --purge    # also removes ~/Art/lib and the agent instructions
