@@ -52,8 +52,15 @@ Built for [Omarchy](https://omarchy.org), degrades gracefully elsewhere.
 ```bash
 git clone https://github.com/Raulonastool/art-computer.git
 cd art-computer
-./install.sh          # add --menu to also add Omarchy menu entries
+./install.sh          # --menu also adds Omarchy menu entries
+                      # --art-home <dir> puts the sketchbook somewhere else
 ```
+
+It symlinks the CLI rather than copying it, so the checkout stays live — `git
+pull` updates your install. Re-running it never overwrites p5, your `AGENTS.md`,
+or a `bindings.lua` it has already wired. Two files *are* refreshed from the
+repo on every run — `~/.config/hypr/art-computer.lua` and the desktop entry — so
+if you edit those, keep a copy.
 
 Then:
 
@@ -74,6 +81,7 @@ art new [name]         an empty sketch, no agent
 art path [name]        print its directory
 art palette            refresh colors from your Omarchy theme
 art serve [--stop|--status|--log]
+art version            what you are running, and which p5
 ```
 
 Every command takes the piece you are standing in, or the most recent one, when
@@ -81,7 +89,7 @@ you leave the name off.
 
 ## How it works
 
-- **One local server** (`lib/art-serve.mjs`, ~300 lines) serves `~/Art` on
+- **One local server** (`lib/art-serve.mjs`, ~340 lines, no dependencies) serves `~/Art` on
   `127.0.0.1:4242`. It is why a sketch can say `<script src="../lib/p5.min.js">`.
 - **Live reload is injected into the response**, never written into your
   `index.html`. Your file on disk stays clean.
@@ -93,6 +101,21 @@ you leave the name off.
 - **Your theme is the palette.** `art palette` renders the active Omarchy theme
   to `~/Art/lib/palette.json` and `palette.js`, and a theme-set hook keeps it
   current, so "use my colors" is always true.
+
+## Why it works that way
+
+The short version of every decision, with the trade-off each one accepts, is in
+**[docs/DESIGN.md](docs/DESIGN.md)**. The ones worth knowing before you install:
+
+- **The artwork is source, not an image**, and everything else follows from it.
+- **No AI is bundled.** Art Computer drives the agent you already configured, so
+  output quality is your agent's, and nothing works until you have set one.
+- **p5.js 1.x, vendored offline.** 2.x broke `preload()` and async loading, so
+  the tutorials a beginner will actually find do not run on it.
+- **The filesystem is the data model.** No database, no index, no lock-in — a
+  piece is a working static site that does not need Art Computer to run.
+- **Omarchy-first.** The desktop integration is good because it targets one
+  desktop. Elsewhere you get the CLI and the sketchbook, without the wiring.
 
 ## What it touches
 
@@ -125,11 +148,64 @@ ART_NO_TRUST=1 art make "..."   # keep the prompt
 ```
 
 ```bash
-./uninstall.sh            # removes all of the above
+./uninstall.sh            # removes everything in the table above
 ./uninstall.sh --purge    # also removes ~/Art/lib and the agent instructions
 ```
 
-**Your artwork is never touched by either script.**
+**Your artwork is never touched by either script.** One thing does outlive them:
+the per-piece entries in `~/.claude.json` stay, because the directories they
+refer to are your artwork and are still there. They are inert — worst case, an
+agent asks about a folder once. Remove them by hand if you want them gone.
+
+## Status
+
+**This is an MVP.** The core loop works and is what the video shows. It is a
+weekend-sized project, used by its author, published in case it is useful.
+
+Working and reasonably solid:
+
+- `art make` end to end — scaffold, window, agent, live reload.
+- The local server, live reload, and the vendored offline p5.
+- The palette pipeline, including regeneration on theme change.
+- `install.sh` / `uninstall.sh`, both idempotent, neither touching your artwork.
+
+Thin, and known to be:
+
+- **One medium.** `--medium` is a real hook with exactly one implementation
+  behind it (`template/p5`). Anything else is an error today.
+- **Trust pre-approval is Claude Code only.** The other eight agents Omarchy
+  supports fall through to a no-op and will still show their own first-run
+  prompt.
+- **Tested on one machine.** Omarchy, Hyprland, Arch, single monitor. Nothing
+  about multi-monitor or another compositor has been exercised.
+- **No test suite.** Correctness so far is "it ran on my laptop."
+- **Slugs are naive.** `slug_from_prompt` takes the first three words that
+  survive a small stopword list, so *"a murmuration of starlings at dusk"*
+  becomes `murmuration-starlings-at`, dangling preposition and all.
+- **Thumbnails are manual.** The gallery draws a placeholder from the seed
+  unless you screenshot a piece into `thumbnail.png` yourself.
+
+Not built, deliberately, for now: sharing or export, any account or sync, a
+plugin system, sketch history beyond `git`.
+
+## What's next
+
+Candidates rather than commitments, roughly in the order they would pay off:
+
+1. **A second medium** behind the existing `--medium` hook — GLSL shaders or
+   Hydra — to prove the seam is real rather than theoretical.
+2. **Trust pre-approval for the other agents**, once each config format has been
+   verified rather than guessed at.
+3. **Headless thumbnails.** The render rig that produced `docs/demo.mp4` already
+   steps a sketch frame by frame in Chromium; pointing it at `thumbnail.png`
+   would remove the one manual step in the loop.
+4. **Better slugs**, and a `--name` escape hatch for when the generated one is
+   wrong.
+5. **A smoke test** that scaffolds, serves, and renders a piece in CI, so
+   "it ran on my laptop" stops being the standard.
+
+Issues and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credit
 

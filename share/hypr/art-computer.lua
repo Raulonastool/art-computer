@@ -1,7 +1,11 @@
 -- Art Computer.
 --
--- Installed by art-computer/install.sh. Yours to edit or delete; nothing
--- outside this file was changed except one require() line in bindings.lua.
+-- Installed by art-computer/install.sh. Nothing outside this file was changed
+-- except one require() line in bindings.lua.
+--
+-- Delete it freely, but note that install.sh rewrites this file on every run,
+-- so local edits are lost on the next upgrade. To change a binding for good,
+-- override it in bindings.lua after the require, or edit the copy in the repo.
 
 o.bind("SUPER + A", "Art Computer", "art home")
 o.bind("SUPER + ALT + A", "Art agent", "art open")

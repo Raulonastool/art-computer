@@ -1,8 +1,14 @@
 #!/bin/bash
 # Install Art Computer.
 #
-# Everything this touches is listed below and removed by ./uninstall.sh.
-# Nothing under /usr/share/omarchy is written. Your artwork is never modified.
+# Usage: ./install.sh [--menu] [--art-home <dir>]
+#
+#   --menu              also add entries to the Omarchy menu (backs it up first)
+#   --art-home <dir>    put the sketchbook somewhere other than ~/Art
+#
+# Every path this writes is listed in the README's "What it touches" table and
+# removed by ./uninstall.sh. Nothing under /usr/share/omarchy is written, and
+# your artwork is never modified.
 
 set -uo pipefail
 
@@ -14,7 +20,7 @@ while (($#)); do
   case "$1" in
     --menu) WITH_MENU=1; shift ;;
     --art-home) ART_HOME="${2:?--art-home needs a directory}"; shift 2 ;;
-    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,11p' "$0" | sed 's/^# \?//'; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -56,6 +62,10 @@ else cp "$ROOT/share/AGENTS.md" "$ART_HOME/AGENTS.md"; ok "$ART_HOME/AGENTS.md";
 # symlink, not a "@AGENTS.md" import line: agents run inside an artwork
 # subdirectory, so that import resolves outside their working directory and
 # Claude Code stops to ask about external files on every single launch.
+#
+# The symlink removes the import, not the question. This file still sits one
+# level above the piece the agent works in, so it counts as an external include
+# on its own; trust_dir() in bin/art is what answers that. See docs/DESIGN.md.
 if [[ -e $ART_HOME/CLAUDE.md || -L $ART_HOME/CLAUDE.md ]]; then
   skip "$ART_HOME/CLAUDE.md (already there)"
 else
