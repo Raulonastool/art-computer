@@ -1,0 +1,12 @@
+#!/bin/bash
+# Regenerate the Art Computer palette when the Omarchy theme changes, so
+# "use my colors" is always true. $1 is the theme slug.
+#
+# Runs on every theme set, including at login: stay fast, and never fail the
+# hook chain.
+
+ART_HOME="${ART_HOME:-$HOME/Art}"
+[[ -d $ART_HOME ]] || exit 0
+command -v art >/dev/null || exit 0
+art palette >/dev/null 2>&1 || true
+exit 0

@@ -1,0 +1,427 @@
+#!/bin/bash
+# art -- Art Computer.
+#
+# Make computational art by talking to your coding agent.
+# The artwork is code. It lives in ~/Art. It belongs to you.
+#
+# https://github.com/Raulonastool/art-computer  (MIT)
+
+set -uo pipefail
+
+ART_VERSION="0.1.0"
+P5_VERSION="1.11.13"
+
+# Where artwork lives. Also the web root, which is what makes a sketch's
+# <script src="../lib/p5.min.js"> resolve.
+ART_HOME="${ART_HOME:-$HOME/Art}"
+
+# The repo, resolved through however this script was symlinked onto PATH.
+ART_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+ART_PORT_DEFAULT="${ART_PORT:-4242}"
+
+# One run directory per sketchbook. Two ART_HOMEs mean two servers, and they
+# must not overwrite each other's port and pid files.
+RUNDIR="${XDG_RUNTIME_DIR:-/tmp}/art-computer/$(printf '%s' "$ART_HOME" | cksum | cut -d' ' -f1)"
+
+# ---------------------------------------------------------------- output ----
+
+die()  { printf '\033[31mart:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[33mart:\033[0m %s\n' "$*" >&2; }
+say()  { printf '%b\n' "$*" >&2; }
+
+# ----------------------------------------------------------------- names ----
+
+slugify() {
+  printf '%s' "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g' \
+    | cut -c1-60
+}
+
+titleize() {
+  printf '%s' "$1" | tr '-' ' ' | sed -E 's/(^| )([a-z])/\1\u\2/g'
+}
+
+# A slug from a free-text prompt: first few meaningful words.
+slug_from_prompt() {
+  local words
+  words=$(printf '%s' "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -cs 'a-z0-9' ' ' \
+    | tr ' ' '\n' \
+    | grep -vxE 'a|an|the|of|with|that|make|makes|making|create|creates|me|my|some|something|and|to|in|on|for|is|it|its|where|every' \
+    | grep -vx '' \
+    | head -3 | paste -sd- -)
+  [[ -n $words ]] && printf '%s' "$words"
+}
+
+# Never clobber. wind-field -> wind-field-2 -> wind-field-3
+unique_slug() {
+  local base="$1" slug="$1" n=2
+  while [[ -e "$ART_HOME/$slug" ]]; do slug="$base-$n"; ((n++)); done
+  printf '%s' "$slug"
+}
+
+# --------------------------------------------------------------- artwork ----
+
+is_artwork() { [[ -f "$1/art.json" ]]; }
+
+list_slugs() {
+  [[ -d $ART_HOME ]] || return 0
+  local d
+  for d in "$ART_HOME"/*/; do
+    [[ -d $d ]] || continue
+    is_artwork "${d%/}" && basename "${d%/}"
+  done
+}
+
+newest_slug() {
+  local newest="" newest_t=0 s t
+  while read -r s; do
+    [[ -n $s ]] || continue
+    t=$(stat -c %Y "$ART_HOME/$s" 2>/dev/null || echo 0)
+    if ((t > newest_t)); then newest_t=$t; newest=$s; fi
+  done < <(list_slugs)
+  printf '%s' "$newest"
+}
+
+# Which artwork are we talking about? An explicit name wins; then the current
+# directory if we are standing inside one; then the most recently touched.
+resolve_slug() {
+  local want="${1:-}"
+  if [[ -n $want ]]; then
+    local slug; slug=$(slugify "$want")
+    is_artwork "$ART_HOME/$slug" && { printf '%s' "$slug"; return 0; }
+    die "no artwork called '$want'. Try: art list"
+  fi
+  local here="$PWD"
+  while [[ $here == "$ART_HOME"/* ]]; do
+    is_artwork "$here" && { basename "$here"; return 0; }
+    here=$(dirname "$here")
+  done
+  local n; n=$(newest_slug)
+  [[ -n $n ]] || die "no artwork yet. Make one: art new"
+  printf '%s' "$n"
+}
+
+# Swap a {{PROMPT_BLOCK}} line for the prompt as a blockquote, or drop the line.
+# Done in bash, not sed, because the prompt is arbitrary text.
+fill_prompt_block() {
+  local file="$1" prompt="$2" line block="" out=""
+  grep -q '{{PROMPT_BLOCK}}' "$file" || return 0
+  [[ -n $prompt ]] && block=$(printf '%s\n' "$prompt" | sed 's/^/> /')$'\n\n'
+  while IFS= read -r line || [[ -n $line ]]; do
+    if [[ $line == *'{{PROMPT_BLOCK}}'* ]]; then
+      out+="$block"
+    else
+      out+="$line"$'\n'
+    fi
+  done <"$file"
+  printf '%s' "$out" >"$file"
+}
+
+now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+random_seed() { printf '%s' $((RANDOM * 32768 + RANDOM)); }
+
+# Bump art.json's modified stamp without disturbing anything else.
+touch_meta() {
+  local dir="$1" tmp
+  [[ -f "$dir/art.json" ]] || return 0
+  tmp=$(mktemp)
+  if jq --arg m "$(now_iso)" '.modified = $m' "$dir/art.json" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$dir/art.json"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# ---------------------------------------------------------------- server ----
+
+server_port() { [[ -f "$RUNDIR/port" ]] && cat "$RUNDIR/port" || printf '%s' "$ART_PORT_DEFAULT"; }
+
+# Alive *and* ours. Port 4242 might belong to somebody else's program; we must
+# never adopt it and start writing artwork into their directory.
+server_alive() {
+  local port root
+  port=$(server_port)
+  root=$(curl -fsS --max-time 1 "http://127.0.0.1:$port/_art/ping" 2>/dev/null \
+         | jq -r '.root // empty' 2>/dev/null) || return 1
+  [[ -n $root && $root == "$ART_HOME" ]]
+}
+
+# node arrives via mise here, so PATH under a Hyprland/uwsm launch may not have
+# it. Look in the obvious places before giving up on live reload.
+find_node() {
+  local n
+  n=$(command -v node 2>/dev/null) && { printf '%s' "$n"; return 0; }
+  for n in "$HOME"/.local/share/mise/installs/node/*/bin/node; do
+    [[ -x $n ]] && { printf '%s' "$n"; return 0; }
+  done
+  return 1
+}
+
+start_server() {
+  server_alive && return 0
+  mkdir -p "$RUNDIR" "$ART_HOME"
+  rm -f "$RUNDIR/port"
+
+  local node
+  if node=$(find_node); then
+    setsid "$node" "$ART_ROOT/lib/art-serve.mjs" \
+      --root "$ART_HOME" --web "$ART_ROOT/web" \
+      --port "$ART_PORT_DEFAULT" --rundir "$RUNDIR" \
+      >"$RUNDIR/log" 2>&1 &
+    echo $! >"$RUNDIR/pid"
+  elif command -v python3 >/dev/null; then
+    warn "node not found -- falling back to python3 -m http.server (no live reload)"
+    ( cd "$ART_HOME" && setsid python3 -m http.server "$ART_PORT_DEFAULT" --bind 127.0.0.1 \
+        >"$RUNDIR/log" 2>&1 & echo $! >"$RUNDIR/pid" )
+    echo "$ART_PORT_DEFAULT" >"$RUNDIR/port"
+  else
+    die "need node or python3 to serve artwork"
+  fi
+
+  local i
+  for i in $(seq 1 60); do
+    server_alive && return 0
+    [[ -f "$RUNDIR/port" ]] && curl -fsS --max-time 1 \
+      "http://127.0.0.1:$(cat "$RUNDIR/port")/" >/dev/null 2>&1 && return 0
+    sleep 0.1
+  done
+  warn "server did not come up; see $RUNDIR/log"
+  return 1
+}
+
+stop_server() {
+  [[ -f "$RUNDIR/pid" ]] || { say "not running"; return 0; }
+  local pid; pid=$(cat "$RUNDIR/pid")
+  kill "$pid" 2>/dev/null && say "stopped (pid $pid)" || say "not running"
+  rm -f "$RUNDIR/pid" "$RUNDIR/port"
+}
+
+# --------------------------------------------------------------- browser ----
+
+# Present a URL as its own window.
+#
+# Chromium ignores --class for --app windows -- it derives the app_id from the
+# URL instead -- so the thing we can actually rely on is the page <title>,
+# which every Art Computer page ends with " · Art Computer". We match on
+# that to raise an already-open window instead of piling up duplicates.
+focus_window() {
+  local title="$1" addr
+  command -v hyprctl >/dev/null || return 1
+  addr=$(hyprctl clients -j 2>/dev/null \
+    | jq -r --arg t "$title" '.[] | select(.title == $t) | .address' | head -n1)
+  [[ -n $addr ]] || return 1
+  # Hyprland 0.5x takes a Lua dispatcher; the bare keyword is the older form.
+  hyprctl dispatch "hl.dsp.focus({ window = \"address:$addr\" })" >/dev/null 2>&1 \
+    || hyprctl dispatch focuswindow "address:$addr" >/dev/null 2>&1
+}
+
+show() {
+  local url="$1" title="${2:-}"
+  [[ -n $title ]] && focus_window "$title" && return 0
+  if command -v omarchy-launch-webapp >/dev/null; then
+    omarchy-launch-webapp "$url" --class=art.computer >/dev/null 2>&1 &
+  elif command -v chromium >/dev/null; then
+    setsid chromium --app="$url" --class=art.computer >/dev/null 2>&1 &
+  else
+    xdg-open "$url" >/dev/null 2>&1 &
+  fi
+  disown 2>/dev/null || true
+}
+
+# ----------------------------------------------------------------- agent ----
+
+# Whichever agent the user already chose. Art Computer brings no AI of its own.
+agent_in() {
+  local dir="$1" prompt="${2:-}"
+  cd "$dir" || die "cannot enter $dir"
+  # A fresh session, not a child of whatever launched us. The server can be
+  # started from inside an agent, and that agent's session markers would
+  # otherwise be inherited here and quietly change how the new one behaves.
+  local clean=(env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID -u ANTHROPIC_MODEL)
+  if command -v omarchy-agent >/dev/null; then
+    if [[ -n $prompt ]]; then "${clean[@]}" omarchy-agent-prompt "$prompt"
+    else "${clean[@]}" omarchy-agent; fi
+  else
+    die "no coding agent configured. On Omarchy: omarchy default agent <name>"
+  fi
+}
+
+# ================================================================ commands ==
+
+cmd_new() {
+  local name="" prompt="" medium="p5" seed=""
+  while (($#)); do
+    case "$1" in
+      --prompt) prompt="${2:?--prompt needs text}"; shift 2 ;;
+      --medium) medium="${2:?--medium needs a name}"; shift 2 ;;
+      --seed)   seed="${2:?--seed needs a number}"; shift 2 ;;
+      -*) die "unknown option: $1" ;;
+      *)  name="$1"; shift ;;
+    esac
+  done
+
+  local tpl="$ART_ROOT/template/$medium"
+  [[ -d $tpl ]] || die "no template for medium '$medium'"
+
+  local base
+  if   [[ -n $name   ]]; then base=$(slugify "$name")
+  elif [[ -n $prompt ]]; then base=$(slug_from_prompt "$prompt")
+  fi
+  [[ -n ${base:-} ]] || base="untitled"
+
+  local slug title dir
+  slug=$(unique_slug "$base")
+  title=$(titleize "$slug")
+  dir="$ART_HOME/$slug"
+  [[ -n $seed ]] || seed=$(random_seed)
+
+  mkdir -p "$dir"
+
+  # Only values we generated ourselves go through sed. The prompt is the user's
+  # own words and may hold &, |, backslashes or newlines -- all of which are sed
+  # replacement syntax -- so it is substituted in plain bash instead.
+  local f out
+  for f in "$tpl"/*; do
+    [[ -f $f ]] || continue
+    out="$dir/$(basename "$f")"
+    sed -e "s|{{TITLE}}|$title|g" \
+        -e "s|{{SLUG}}|$slug|g" \
+        -e "s|{{SEED}}|$seed|g" \
+        "$f" >"$out" || die "could not write $out"
+    # An empty scaffold file is a blank white window later. Catch it here.
+    [[ -s $out ]] || die "template $f produced an empty $out"
+    fill_prompt_block "$out" "$prompt"
+  done
+
+  jq -n \
+    --arg title "$title" --arg medium "${medium}js" \
+    --arg created "$(now_iso)" --arg modified "$(now_iso)" \
+    --arg prompt "$prompt" --arg p5 "$P5_VERSION" \
+    --argjson seed "$seed" \
+    '{title:$title, medium:$medium, created:$created, modified:$modified,
+      seed:$seed, prompt:$prompt, inspiration:[], tags:[], p5:$p5}' \
+    >"$dir/art.json"
+
+  say "made \033[1m$title\033[0m  ->  $dir"
+  printf '%s\n' "$slug"
+}
+
+cmd_run() {
+  local slug; slug=$(resolve_slug "${1:-}") || exit 1
+  start_server || die "could not start the art server"
+  local url="http://127.0.0.1:$(server_port)/$slug/"
+  local title; title=$(jq -r '.title // ""' "$ART_HOME/$slug/art.json" 2>/dev/null)
+  say "running $slug  ->  $url"
+  show "$url" "$title · Art Computer"
+}
+
+cmd_home() {
+  start_server || die "could not start the art server"
+  local url="http://127.0.0.1:$(server_port)/${1:-}"
+  show "$url" "Art Computer"
+}
+
+cmd_list() {
+  local any=0 slug title modified prompt
+  while read -r slug; do
+    [[ -n $slug ]] || continue
+    any=1
+    title=$(jq -r '.title // ""'  "$ART_HOME/$slug/art.json" 2>/dev/null)
+    modified=$(jq -r '.modified // ""' "$ART_HOME/$slug/art.json" 2>/dev/null)
+    prompt=$(jq -r '.prompt // ""' "$ART_HOME/$slug/art.json" 2>/dev/null)
+    printf '\033[1m%-28s\033[0m %-10s %s\n' "$slug" "${modified:0:10}" "${prompt:0:60}"
+  done < <(list_slugs | sort)
+  ((any)) || say "no artwork yet. Make something:  art make \"a field of grass in the wind\""
+}
+
+cmd_open() {
+  local slug; slug=$(resolve_slug "${1:-}") || exit 1
+  say "opening $slug with your agent"
+  agent_in "$ART_HOME/$slug"
+}
+
+cmd_path() {
+  local slug; slug=$(resolve_slug "${1:-}") || exit 1
+  printf '%s\n' "$ART_HOME/$slug"
+}
+
+# The whole loop in one command: scaffold, show it, hand it to the agent.
+cmd_make() {
+  local prompt="$*"
+  [[ -n $prompt ]] || die "what do you want to make?  art make \"a school of fish\""
+
+  local slug; slug=$(cmd_new --prompt "$prompt") || exit 1
+  cmd_run "$slug"
+
+  agent_in "$ART_HOME/$slug" "$(cat <<PROMPT
+Make this p5.js artwork: $prompt
+
+You are in the Art Computer artwork directory $ART_HOME/$slug. Edit sketch.js.
+It is already open in a browser and live-reloads when you save, so do not start
+a server or open anything. Read $ART_HOME/AGENTS.md for the conventions.
+PROMPT
+)"
+}
+
+cmd_serve() {
+  case "${1:-}" in
+    --stop)   stop_server ;;
+    --status)
+      if server_alive; then
+        say "running on http://127.0.0.1:$(server_port)  (pid $(cat "$RUNDIR/pid" 2>/dev/null))"
+      else
+        say "not running"
+      fi ;;
+    --log)    tail -n 40 "$RUNDIR/log" 2>/dev/null || say "no log" ;;
+    "")       start_server && say "serving $ART_HOME on http://127.0.0.1:$(server_port)" ;;
+    *)        die "art serve [--stop|--status|--log]" ;;
+  esac
+}
+
+cmd_palette() { "$ART_ROOT/lib/art-palette" "$ART_HOME"; }
+
+cmd_help() {
+  cat >&2 <<HELP
+
+  ART COMPUTER $ART_VERSION
+
+  make something
+    art make "a field of grass where every blade follows invisible wind"
+    art home                     open Art Computer in a window
+
+  work with what you have
+    art list                     everything you have made
+    art run [name]               show it
+    art open [name]              talk to your agent about it
+    art new [name]               empty sketch, no agent
+    art path [name]              print its directory
+
+  housekeeping
+    art serve [--stop|--status|--log]
+    art palette                  refresh colors from your Omarchy theme
+
+  Artwork lives in $ART_HOME. Each piece is a plain directory of source you own.
+
+HELP
+}
+
+# ==================================================================== main ==
+
+case "${1:-help}" in
+  new)      shift; cmd_new "$@" ;;
+  run)      shift; cmd_run "$@" ;;
+  list|ls)  shift; cmd_list "$@" ;;
+  open|edit) shift; cmd_open "$@" ;;
+  make)     shift; cmd_make "$@" ;;
+  home)     shift; cmd_home "$@" ;;
+  path)     shift; cmd_path "$@" ;;
+  serve)    shift; cmd_serve "$@" ;;
+  palette)  shift; cmd_palette "$@" ;;
+  version|--version|-v) printf 'art %s (p5.js %s)\n' "$ART_VERSION" "$P5_VERSION" ;;
+  help|--help|-h) cmd_help ;;
+  *) die "unknown command: $1  (try: art help)" ;;
+esac

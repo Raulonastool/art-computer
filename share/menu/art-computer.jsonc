@@ -1,0 +1,5 @@
+  "art": {"icon":"󰃣","label":"Art","description":"Art Computer — make computational art"},
+  "art.make": {"icon":"","label":"Make something","action":"art home"},
+  "art.mine": {"icon":"","label":"My artwork","action":"art home#mine"},
+  "art.learn": {"icon":"󰑴","label":"Learn","action":"art home#learn"},
+  "art.explore": {"icon":"󰈈","label":"Explore","action":"art home#explore"},

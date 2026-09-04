@@ -1,0 +1,40 @@
+Art Computer
+============
+
+Art Computer is an independent, community project. It is NOT affiliated with,
+endorsed by, or sponsored by any of the projects it integrates with or links
+to, including: Omarchy, Omacom, DHH, p5.js, the Processing Foundation, The
+Coding Train / Daniel Shiffman, OpenProcessing, or Shadertoy.
+
+All trademarks are the property of their respective owners.
+
+
+Bundled third-party software
+----------------------------
+
+p5.js
+  Version:  1.11.13
+  Home:     https://p5js.org
+  Source:   https://github.com/processing/p5.js
+  License:  GNU Lesser General Public License v2.1 (LGPL-2.1)
+  Notice:   A minified copy of p5.js is installed to ~/Art/lib/p5.min.js so
+            that sketches run offline. It is unmodified. The full license text
+            ships inside that file's header and is available at
+            https://github.com/processing/p5.js/blob/main/license.txt
+
+  p5.js is created and maintained by the Processing Foundation and the p5.js
+  community. Art Computer merely bundles it. Please support them:
+  https://processingfoundation.org/
+
+
+Linked learning resources
+-------------------------
+
+Art Computer links out to educational material. It does not copy, mirror, or
+scrape it. Credit belongs to the original creators:
+
+  The Coding Train          Daniel Shiffman      https://thecodingtrain.com
+  p5.js tutorials/reference Processing Foundation https://p5js.org
+  OpenProcessing            OpenProcessing        https://openprocessing.org
+  Shadertoy                 Shadertoy             https://shadertoy.com
+  Hydra                     Olivia Jack           https://hydra.ojack.xyz

@@ -1,0 +1,71 @@
+#!/bin/bash
+# art-palette -- turn the active Omarchy theme into an artist's palette.
+#
+# Writes ~/Art/lib/palette.json (for tools) and ~/Art/lib/palette.js (a plain
+# PALETTE global, so a sketch needs exactly one extra script tag).
+#
+# Omarchy already exposes its theme as key/value pairs via omarchy-theme-color,
+# so there is no config file to parse and nothing to keep in sync by hand.
+
+set -uo pipefail
+
+ART_HOME="${1:-${ART_HOME:-$HOME/Art}}"
+LIB="$ART_HOME/lib"
+mkdir -p "$LIB"
+
+declare -A C
+
+if command -v omarchy-theme-color >/dev/null 2>&1; then
+  while IFS=$'\t' read -r k v; do
+    [[ -n ${k:-} && -n ${v:-} ]] && C[$k]="$v"
+  done < <(omarchy-theme-color --all 2>/dev/null)
+fi
+
+# Off Omarchy, or if the resolver is unavailable, still produce something usable
+# rather than failing -- a sketch asking for theme colors should never break.
+if ((${#C[@]} == 0)); then
+  C=( [mode]=dark [background]="#141414" [foreground]="#cacccc" [accent]="#7aa2f7"
+      [muted]="#565f89" [selection]="#292e42" [bright_foreground]="#ffffff"
+      [red]="#f7768e" [orange]="#eb927b" [yellow]="#e0af68" [green]="#9ece6a"
+      [cyan]="#449dab" [blue]="#7aa2f7" [magenta]="#ad8ee6" )
+  THEME="none"
+else
+  THEME=$(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || echo unknown)
+fi
+
+get() { printf '%s' "${C[$1]:-${C[$2]:-$3}}"; }
+
+BACKGROUND=$(get background bg "#141414")
+FOREGROUND=$(get foreground fg "#cacccc")
+ACCENT=$(get accent blue "$FOREGROUND")
+MUTED=$(get muted dark_foreground "#565f89")
+SELECTION=$(get selection lighter_background "$MUTED")
+HIGHLIGHT=$(get bright_foreground light_foreground "$FOREGROUND")
+MODE=$(get mode theme_type dark)
+
+# The part an artist actually reaches for: a ready sequence to loop over.
+HUES=()
+for h in red orange yellow green cyan blue magenta; do
+  [[ -n ${C[$h]:-} ]] && HUES+=("${C[$h]}")
+done
+((${#HUES[@]})) || HUES=("$ACCENT" "$FOREGROUND")
+
+hues_json=$(printf '%s\n' "${HUES[@]}" | jq -R . | jq -sc .)
+
+jq -n --arg theme "$THEME" --arg mode "$MODE" \
+      --arg background "$BACKGROUND" --arg foreground "$FOREGROUND" \
+      --arg accent "$ACCENT" --arg muted "$MUTED" \
+      --arg highlight "$HIGHLIGHT" --arg selection "$SELECTION" \
+      --argjson colors "$hues_json" \
+  '{theme:$theme, mode:$mode, background:$background, foreground:$foreground,
+    accent:$accent, muted:$muted, highlight:$highlight, selection:$selection,
+    colors:$colors}' > "$LIB/palette.json"
+
+{
+  echo "// Your current Omarchy theme, as a palette."
+  echo "// Regenerated automatically whenever you change themes."
+  echo "// Add <script src=\"../lib/palette.js\"></script> to use it."
+  echo "const PALETTE = $(jq . "$LIB/palette.json");"
+} > "$LIB/palette.js"
+
+printf 'palette: %s (%s)  ->  %s\n' "$THEME" "$MODE" "$LIB/palette.json" >&2

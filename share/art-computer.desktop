@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=Art Computer
+Comment=Make computational art by talking to your coding agent
+Exec=art home
+Terminal=false
+Type=Application
+Icon=applications-graphics
+Categories=Graphics;Development;
+StartupNotify=true

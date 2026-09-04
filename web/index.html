@@ -1,0 +1,652 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The window manager finds this window by its exact title. Keep it. -->
+<title>Art Computer</title>
+
+<style>
+  /* Defaults, replaced at load by your Omarchy theme (/lib/palette.json). */
+  :root {
+    --bg: #1a1b26;
+    --fg: #a9b1d6;
+    --accent: #7aa2f7;
+    --muted: #414868;
+    --highlight: #c0caf5;
+    --selection: #292e42;
+    --c0: #f7768e; --c1: #eb927b; --c2: #e0af68; --c3: #9ece6a;
+    --c4: #449dab; --c5: #7aa2f7; --c6: #ad8ee6;
+
+    --mono: ui-monospace, "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+    --sans: ui-sans-serif, system-ui, sans-serif;
+    --edge: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ------------------------------------------------------------- chrome -- */
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--selection);
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 2;
+  }
+
+  .mark {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--highlight);
+    white-space: nowrap;
+  }
+  .mark b { color: var(--accent); font-weight: 400; }
+
+  nav { display: flex; gap: 4px; margin-left: auto; }
+
+  nav a {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 6px 12px;
+    border-radius: var(--edge);
+    text-decoration: none;
+  }
+  nav a:hover { color: var(--fg); background: var(--selection); text-decoration: none; }
+  nav a.on { color: var(--bg); background: var(--accent); }
+
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 28px 80px; }
+
+  section { display: none; }
+  section.on { display: block; animation: rise .18s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    font-weight: 400;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 18px;
+  }
+
+  .lede { font-size: 17px; color: var(--highlight); margin: 0 0 28px; max-width: 60ch; }
+
+  /* --------------------------------------------------------------- make -- */
+
+  #make .lede { font-size: 22px; line-height: 1.4; margin-bottom: 20px; }
+
+  .composer {
+    border: 1px solid var(--selection);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--selection) 35%, var(--bg));
+    padding: 6px 6px 6px 18px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    transition: border-color .15s;
+  }
+  .composer:focus-within { border-color: var(--accent); }
+
+  .composer textarea {
+    flex: 1;
+    border: 0;
+    outline: 0;
+    resize: none;
+    background: none;
+    color: var(--highlight);
+    font: 16px/1.6 var(--sans);
+    padding: 12px 0;
+    max-height: 40vh;
+  }
+  .composer textarea::placeholder { color: var(--muted); }
+
+  button {
+    font: 13px var(--mono);
+    color: var(--bg);
+    background: var(--accent);
+    border: 0;
+    border-radius: 11px;
+    padding: 11px 18px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:disabled { opacity: .5; cursor: default; filter: none; }
+
+  .hint { font: 12px var(--mono); color: var(--muted); margin-top: 10px; height: 1.6em; }
+  .hint.live { color: var(--c3); }
+
+  .seeds { margin-top: 36px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .seed {
+    font: 13px var(--sans);
+    color: var(--fg);
+    background: none;
+    border: 1px solid var(--selection);
+    border-radius: 999px;
+    padding: 7px 15px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .seed:hover { border-color: var(--accent); color: var(--highlight); }
+
+  /* --------------------------------------------------------------- mine -- */
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr));
+    gap: 20px;
+  }
+
+  .card {
+    display: block;
+    border: 1px solid var(--selection);
+    border-radius: 14px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--selection) 25%, var(--bg));
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .15s, transform .15s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
+
+  .card .art { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--bg); }
+  .card .body { padding: 12px 14px 14px; }
+  .card .title { color: var(--highlight); font-size: 15px; }
+  .card .meta {
+    font: 11.5px var(--mono);
+    color: var(--muted);
+    margin-top: 4px;
+    display: flex;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .card .prompt {
+    font-size: 13px;
+    color: var(--fg);
+    margin-top: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .empty {
+    border: 1px dashed var(--selection);
+    border-radius: 14px;
+    padding: 48px 28px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .empty p { margin: 0 0 18px; }
+
+  /* -------------------------------------------------- learn and explore -- */
+
+  .links { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 14px; }
+
+  .link {
+    display: block;
+    border: 1px solid var(--selection);
+    border-radius: 14px;
+    padding: 16px 18px;
+    color: inherit;
+    text-decoration: none;
+  }
+  .link:hover { border-color: var(--accent); text-decoration: none; }
+  .link b { color: var(--highlight); font-weight: 500; display: block; }
+  .link .by { font: 11.5px var(--mono); color: var(--muted); margin-top: 2px; }
+  .link p { margin: 8px 0 0; font-size: 13.5px; }
+
+  .aside {
+    margin-top: 34px;
+    border-left: 2px solid var(--selection);
+    padding-left: 18px;
+    font-size: 14px;
+    max-width: 62ch;
+  }
+  code {
+    font: 12.5px var(--mono);
+    background: var(--selection);
+    color: var(--highlight);
+    padding: 2px 6px;
+    border-radius: 6px;
+  }
+  .aside p { margin: 0 0 10px; }
+
+  /* This window gets tiled, so it has to survive being narrow. */
+  @media (max-width: 760px) {
+    header { padding: 14px 16px; gap: 12px; flex-wrap: wrap; }
+    main { padding: 28px 16px 60px; }
+    #make .lede { font-size: 19px; }
+    .lede { font-size: 15.5px; }
+  }
+
+  @media (max-width: 460px) {
+    .mark { font-size: 11px; letter-spacing: .1em; }
+    nav a { padding: 6px 9px; font-size: 12px; }
+    .composer { flex-direction: column; align-items: stretch; padding: 14px; gap: 6px; }
+    .composer textarea { padding: 0 0 8px; }
+    .seed { font-size: 12.5px; }
+  }
+
+  footer {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 max(16px, min(28px, 3vw)) 40px;
+    font: 11.5px var(--mono);
+    color: var(--muted);
+    line-height: 1.9;
+  }
+</style>
+
+<header>
+  <div class="mark">◈ <b>Art</b> Computer</div>
+  <nav>
+    <a href="#make">make</a>
+    <a href="#mine">mine</a>
+    <a href="#learn">learn</a>
+    <a href="#explore">explore</a>
+  </nav>
+</header>
+
+<main>
+
+  <section id="make">
+    <p class="lede">What do you want to make?</p>
+
+    <div class="composer">
+      <textarea id="prompt" rows="1" autofocus spellcheck="false"
+        placeholder="a field of grass where every blade follows invisible wind"></textarea>
+      <button id="go">make it</button>
+    </div>
+    <p class="hint" id="hint">Enter to make · Shift + Enter for a new line</p>
+
+    <div class="seeds" id="seeds"></div>
+  </section>
+
+  <section id="mine">
+    <h2>My artwork</h2>
+    <div id="gallery"></div>
+  </section>
+
+  <section id="learn">
+    <h2>Learn</h2>
+    <p class="lede">The people who taught everyone else. Start with any of these —
+      then bring what you find back here and remix it.</p>
+    <div class="links" id="learn-links"></div>
+
+    <div class="aside">
+      <p>Your agent is the other half of this. From any artwork directory:</p>
+      <p><code>art open wind-field</code></p>
+      <p>Then ask it plainly — <em>“explain this file line by line”</em>,
+        <em>“what is Perlin noise doing here?”</em>, <em>“make it slower and softer”</em>.
+        The code is yours; it is meant to be taken apart.</p>
+    </div>
+  </section>
+
+  <section id="explore">
+    <h2>Explore</h2>
+    <p class="lede">Where computational artists publish. Read someone's source,
+      then ask your agent for your own take on it — and credit them in
+      <code>art.json</code>.</p>
+    <div class="links" id="explore-links"></div>
+  </section>
+
+</main>
+
+<footer>
+  Artwork lives in ~/Art · drawn with p5.js 1.11.13 · <span id="theme"></span><br>
+  An independent project. Not affiliated with, endorsed by, or sponsored by the
+  projects it links to.
+</footer>
+
+<script>
+// Art Computer's home page. Plain HTML and JavaScript, like everything else
+// here -- if you want to change it, you can just read it.
+
+// ------------------------------------------------------------- palette ----
+
+// The desktop's own colors, so this page follows your Omarchy theme.
+async function loadPalette() {
+  try {
+    const p = await (await fetch('/lib/palette.json', { cache: 'no-store' })).json();
+    const root = document.documentElement.style;
+    for (const key of ['background', 'foreground', 'accent', 'muted', 'highlight', 'selection']) {
+      if (p[key]) root.setProperty('--' + (key === 'background' ? 'bg' : key === 'foreground' ? 'fg' : key), p[key]);
+    }
+    (p.colors || []).forEach((c, i) => root.setProperty('--c' + i, c));
+    document.getElementById('theme').textContent = 'theme: ' + (p.theme || 'unknown');
+    return p;
+  } catch { return null; }
+}
+
+// ------------------------------------------------------------ navigation --
+
+const VIEWS = ['make', 'mine', 'learn', 'explore'];
+
+function show(view) {
+  if (!VIEWS.includes(view)) view = 'make';
+  for (const v of VIEWS) {
+    document.getElementById(v).classList.toggle('on', v === view);
+    document.querySelector(`nav a[href="#${v}"]`).classList.toggle('on', v === view);
+  }
+  if (view === 'make') document.getElementById('prompt').focus();
+  if (view === 'mine') refresh();
+}
+
+addEventListener('hashchange', () => show(location.hash.slice(1)));
+
+// ---------------------------------------------------------------- sigil ----
+
+// Every piece gets a picture in the gallery. If it has a thumbnail.png we use
+// that; otherwise we draw one from its seed, so the same artwork always wears
+// the same face.
+
+function mulberry32(a) {
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function sigil(seed) {
+  const w = 480, h = 300;
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  cv.className = 'art';
+  const g = cv.getContext('2d');
+  const css = getComputedStyle(document.documentElement);
+  const hues = [0, 1, 2, 3, 4, 5, 6].map((i) => css.getPropertyValue('--c' + i).trim()).filter(Boolean);
+
+  g.fillStyle = css.getPropertyValue('--bg').trim() || '#1a1b26';
+  g.fillRect(0, 0, w, h);
+
+  // A handful of drifting lines. Same seed, same drift.
+  const rnd = mulberry32(seed | 0);
+  g.lineWidth = 1.5;
+  g.globalAlpha = 0.75;
+  for (let line = 0; line < 34; line++) {
+    let x = rnd() * w, y = rnd() * h, angle = rnd() * Math.PI * 2;
+    g.strokeStyle = hues[Math.floor(rnd() * hues.length)] || '#7aa2f7';
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let step = 0; step < 40; step++) {
+      angle += (rnd() - 0.5) * 0.55;
+      x += Math.cos(angle) * 7;
+      y += Math.sin(angle) * 7;
+      g.lineTo(x, y);
+    }
+    g.stroke();
+  }
+  return cv;
+}
+
+// -------------------------------------------------------------- gallery ----
+
+const rel = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+const UNITS = [['year', 31536e6], ['month', 2592e6], ['week', 6048e5], ['day', 864e5], ['hour', 36e5], ['minute', 6e4]];
+
+function ago(ms) {
+  const diff = ms - Date.now();
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(diff) >= size) return rel.format(Math.round(diff / size), unit);
+  }
+  return 'just now';
+}
+
+function card(art) {
+  const a = document.createElement('a');
+  a.className = 'card';
+  // A real href, so middle-click and copy-link still do the obvious thing --
+  // but a plain click asks the server to open it, which is the same path
+  // `art run` takes: its own window, correct title, correct window rules.
+  a.href = art.url;
+  a.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    openPiece(art.slug);
+  });
+
+  if (art.thumbnail) {
+    const img = document.createElement('img');
+    img.className = 'art';
+    img.src = art.thumbnail;
+    img.alt = '';
+    img.loading = 'lazy';
+    a.append(img);
+  } else {
+    a.append(sigil(art.seed || 0));
+  }
+
+  const body = document.createElement('div');
+  body.className = 'body';
+
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = art.title || art.slug;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  const when = document.createElement('span');
+  when.textContent = ago(art.mtime);
+  const slug = document.createElement('span');
+  slug.textContent = art.slug;
+  meta.append(when, slug);
+
+  body.append(title, meta);
+
+  if (art.prompt) {
+    const p = document.createElement('div');
+    p.className = 'prompt';
+    p.textContent = art.prompt;
+    body.append(p);
+  }
+
+  a.append(body);
+  return a;
+}
+
+let known = new Set();
+
+async function openPiece(slug) {
+  try {
+    await fetch('/_art/open', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug }),
+    });
+  } catch {}
+}
+
+async function refresh() {
+  const gallery = document.getElementById('gallery');
+  let list = [];
+  try { list = await (await fetch('/_art/sketches', { cache: 'no-store' })).json(); } catch {}
+
+  known = new Set(list.map((a) => a.slug));
+  gallery.replaceChildren();
+
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    const p = document.createElement('p');
+    p.textContent = 'Nothing here yet.';
+    const b = document.createElement('button');
+    b.textContent = 'make something';
+    b.onclick = () => { location.hash = '#make'; };
+    empty.append(p, b);
+    gallery.append(empty);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  for (const art of list) grid.append(card(art));
+  gallery.append(grid);
+}
+
+// ----------------------------------------------------------------- make ----
+
+const promptBox = document.getElementById('prompt');
+const goButton = document.getElementById('go');
+const hint = document.getElementById('hint');
+
+function grow() {
+  promptBox.style.height = 'auto';
+  promptBox.style.height = promptBox.scrollHeight + 'px';
+}
+promptBox.addEventListener('input', grow);
+
+promptBox.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); make(); }
+});
+goButton.addEventListener('click', make);
+
+async function make() {
+  const prompt = promptBox.value.trim();
+  if (!prompt) { promptBox.focus(); return; }
+
+  goButton.disabled = true;
+  hint.className = 'hint';
+  hint.textContent = 'handing it to your agent…';
+
+  try {
+    const res = await fetch('/_art/make', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+  } catch (err) {
+    hint.textContent = 'could not start: ' + err.message;
+    goButton.disabled = false;
+    return;
+  }
+
+  hint.className = 'hint live';
+  hint.textContent = 'your agent is on it — a canvas window is opening';
+  promptBox.value = '';
+  grow();
+  waitForNewPiece();
+}
+
+// The agent works in its own window. Watch the sketch list, and when something
+// new lands, say so instead of leaving the page looking idle.
+function waitForNewPiece() {
+  const before = new Set(known);
+  let tries = 0;
+  const timer = setInterval(async () => {
+    tries++;
+    let list = [];
+    try { list = await (await fetch('/_art/sketches', { cache: 'no-store' })).json(); } catch {}
+    const fresh = list.find((a) => !before.has(a.slug));
+    if (fresh) {
+      clearInterval(timer);
+      known.add(fresh.slug);
+      hint.className = 'hint live';
+      hint.textContent = 'made ' + fresh.slug + ' — it is in "mine"';
+      goButton.disabled = false;
+      refresh();
+    } else if (tries > 60) {
+      clearInterval(timer);
+      goButton.disabled = false;
+    }
+  }, 1000);
+}
+
+// -------------------------------------------------------------- content ----
+
+const SEEDS = [
+  'a field of grass where every blade follows invisible wind',
+  'a thousand dots that remember where they have been',
+  'slow circles breathing in my theme colors',
+  'a city skyline drawn by a machine that has never seen one',
+  'rain on a window, one drop at a time',
+  'a flock that panics when the mouse gets close',
+];
+
+const LEARN = [
+  { url: 'https://thecodingtrain.com', name: 'The Coding Train', by: 'Daniel Shiffman',
+    text: 'Video tutorials on creative coding. The friendliest way in — start with the Coding Challenges.' },
+  { url: 'https://p5js.org/tutorials/', name: 'p5.js tutorials', by: 'Processing Foundation',
+    text: 'The official introduction, from a first shape to animation and interaction.' },
+  { url: 'https://p5js.org/reference/', name: 'p5.js reference', by: 'Processing Foundation',
+    text: 'Every function, with a runnable example. Keep it open while you work.' },
+  { url: 'https://natureofcode.com', name: 'The Nature of Code', by: 'Daniel Shiffman',
+    text: 'Forces, flow fields, flocking, fractals. Free to read online.' },
+];
+
+const EXPLORE = [
+  { url: 'https://openprocessing.org', name: 'OpenProcessing', by: 'community',
+    text: 'Thousands of p5.js sketches with their source open. Closest to what you make here.' },
+  { url: 'https://shadertoy.com', name: 'Shadertoy', by: 'community',
+    text: 'GPU shaders, live in the browser. A different medium, endlessly worth stealing ideas from.' },
+  { url: 'https://hydra.ojack.xyz', name: 'Hydra', by: 'Olivia Jack',
+    text: 'Live-coded video synthesis. Type, and the picture changes underneath you.' },
+  { url: 'https://processingfoundation.org', name: 'Processing Foundation', by: 'p5.js stewards',
+    text: 'The nonprofit behind p5.js. If this project is useful to you, support them.' },
+];
+
+function linkCard(item) {
+  const a = document.createElement('a');
+  a.className = 'link';
+  a.href = item.url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  const b = document.createElement('b');
+  b.textContent = item.name;
+  const by = document.createElement('div');
+  by.className = 'by';
+  by.textContent = item.by;
+  const p = document.createElement('p');
+  p.textContent = item.text;
+  a.append(b, by, p);
+  return a;
+}
+
+function fillContent() {
+  const seeds = document.getElementById('seeds');
+  for (const text of SEEDS) {
+    const b = document.createElement('button');
+    b.className = 'seed';
+    b.textContent = text;
+    b.onclick = () => { promptBox.value = text; grow(); promptBox.focus(); };
+    seeds.append(b);
+  }
+  document.getElementById('learn-links').append(...LEARN.map(linkCard));
+  document.getElementById('explore-links').append(...EXPLORE.map(linkCard));
+}
+
+// ----------------------------------------------------------------- boot ----
+
+fillContent();
+loadPalette().then(refresh);
+show(location.hash.slice(1));
+
+// The server tells us when anything in ~/Art changes, so the gallery is never
+// stale while you work.
+try {
+  new EventSource('/_art/events').addEventListener('reload', () => refresh());
+} catch {}
+</script>
