@@ -227,7 +227,9 @@ version:
 - `ART_NO_TRUST=1` keeps the prompt.
 
 The consent is real — you asked for the directory by name — and recording it is
-honest rather than a bypass. Anything broader would not be.
+honest rather than a bypass. Anything broader would not be. `./uninstall.sh`
+clears those same three flags again, and only those: consent taken on your
+behalf should not outlive the tool that took it.
 
 **Trade-off.** A tool writing to another tool's config file is a coupling, and
 it can be lost if a running agent rewrites `~/.claude.json` at the wrong moment.

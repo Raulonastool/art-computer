@@ -141,7 +141,8 @@ that defaults to *no*. When your default agent is Claude Code, `art` records tha
 consent for you in `~/.claude.json`, for that one piece directory. It only ever
 marks a directory that sits directly inside `~/Art` and carries an `art.json` —
 that is, one `art` made itself, a second ago, because you asked it to. Nothing
-else is trusted on your behalf, and no other setting is changed.
+else is trusted on your behalf, no other setting is changed, and `./uninstall.sh`
+hands it all back.
 
 ```bash
 ART_NO_TRUST=1 art make "..."   # keep the prompt
@@ -152,10 +153,11 @@ ART_NO_TRUST=1 art make "..."   # keep the prompt
 ./uninstall.sh --purge    # also removes ~/Art/lib and the agent instructions
 ```
 
-**Your artwork is never touched by either script.** One thing does outlive them:
-the per-piece entries in `~/.claude.json` stay, because the directories they
-refer to are your artwork and are still there. They are inert — worst case, an
-agent asks about a folder once. Remove them by hand if you want them gone.
+**Your artwork is never touched by either script.** Uninstalling also hands back
+the trust described above: it clears those three flags from every piece entry in
+`~/.claude.json`, and only those three. The rest of each entry is Claude Code's
+own record of sessions that really happened, so it stays — that file belongs to
+Claude Code, not to Art Computer.
 
 ## Status
 
