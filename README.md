@@ -6,17 +6,23 @@ Art Computer turns a prompt into a running p5.js sketch that lives as plain
 source in `~/Art` — a directory you own, can read, can edit, and can learn from.
 
 ```bash
-art make "a field of grass where every blade follows invisible wind"
+art make "a murmuration of starlings at dusk"
 ```
 
-![Wind Field, made with Art Computer](docs/demo.gif)
+![Making a piece with Art Computer, start to finish](docs/process.gif)
 
-<sub>*Wind Field* — the piece that prompt produces, running in its own window and
-picking up the desktop's Tokyo Night colours. 129 lines of plain JavaScript you
-can open and change. [Full quality video](docs/demo.mp4).</sub>
+<sub>One unbroken take: the prompt goes in, the agent writes `sketch.js`, and the
+canvas beside it comes alive as the file saves. Sped up through the thinking —
+about two and a half minutes in real time.
+[Full quality video](docs/process.mp4).</sub>
 
 That scaffolds the piece, opens it in its own window, and hands it to whichever
 coding agent you already use. You watch the canvas redraw as it writes.
+
+![Wind Field, made with Art Computer](docs/demo.gif)
+
+<sub>*Wind Field* — 129 lines of plain JavaScript, picking up the desktop's Tokyo
+Night colours. [Full quality video](docs/demo.mp4).</sub>
 
 **The artwork is code, not an image.** A PNG is an export. The program is the
 thing, and it is small enough to read.
