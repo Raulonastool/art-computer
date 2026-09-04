@@ -9,6 +9,12 @@ source in `~/Art` — a directory you own, can read, can edit, and can learn fro
 art make "a field of grass where every blade follows invisible wind"
 ```
 
+![Wind Field, made with Art Computer](docs/demo.gif)
+
+<sub>*Wind Field* — the piece that prompt produces, running in its own window and
+picking up the desktop's Tokyo Night colours. 129 lines of plain JavaScript you
+can open and change. [Full quality video](docs/demo.mp4).</sub>
+
 That scaffolds the piece, opens it in its own window, and hands it to whichever
 coding agent you already use. You watch the canvas redraw as it writes.
 
