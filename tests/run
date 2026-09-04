@@ -1,0 +1,47 @@
+#!/bin/bash
+# Run every test. No arguments runs all of them; a name runs one.
+#
+#   ./tests/run
+#   ./tests/run trust
+#
+# Each test builds its own throwaway HOME and stubs anything that would reach
+# the real desktop, so this is safe to run on the machine you use.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$ROOT" || exit 1
+
+command -v jq >/dev/null || { echo "tests need jq" >&2; exit 1; }
+
+filter="${1:-}"
+failed=0
+ran=0
+
+# Syntax first: a parse error in a shell script is a failure the suite should
+# report as one, not something a later test trips over sideways.
+printf '\n\033[1msyntax\033[0m\n\n'
+for f in bin/art install.sh uninstall.sh lib/art-palette tests/*.sh tests/run; do
+  if bash -n "$f" 2>/dev/null; then printf '  \033[32mok\033[0m    %s\n' "$f"
+  else printf '  \033[31mFAIL\033[0m  %s\n' "$f"; bash -n "$f"; ((failed++)); fi
+done
+if node --check lib/art-serve.mjs 2>/dev/null; then
+  printf '  \033[32mok\033[0m    lib/art-serve.mjs\n'
+else
+  printf '  \033[31mFAIL\033[0m  lib/art-serve.mjs\n'; ((failed++))
+fi
+
+for t in "$ROOT"/tests/test-*.sh; do
+  [[ -n $filter && $t != *"$filter"* ]] && continue
+  ((ran++))
+  bash "$t" || ((failed++))
+done
+
+if [[ $ran -eq 0 && -n $filter ]]; then
+  echo "no test matches '$filter'" >&2; exit 1
+fi
+
+printf '\n'
+if ((failed)); then
+  printf '\033[31m%d failed\033[0m\n\n' "$failed"; exit 1
+fi
+printf '\033[32mall green\033[0m\n\n'

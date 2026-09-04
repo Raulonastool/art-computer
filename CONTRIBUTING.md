@@ -52,15 +52,37 @@ The install symlinks rather than copies, so edits to `bin/art` are live
 immediately — no reinstall between changes.
 
 ```bash
-bash -n bin/art                   # syntax check
+./tests/run                       # everything
+./tests/run trust                 # one test by name
 ART_HOME=/tmp/art-test art list   # run against a scratch sketchbook
 art serve --log                   # what the server is doing
 ```
 
 `ART_HOME` redirects everything — CLI, server, install — at a throwaway
-directory, which is the safe way to test anything destructive.
+directory, which is the safe way to try anything destructive by hand.
 
-There is no test suite yet. If you add one, that is a contribution in itself.
+## Tests
+
+`./tests/run` syntax-checks every script, then runs `tests/test-*.sh`. It exits
+non-zero on the first failed assertion and prints what it wanted against what it
+got.
+
+Coverage is deliberately lopsided: it is all on the code that writes to
+`~/.claude.json`, because that file belongs to Claude Code rather than to us and
+getting it wrong damages something a user did not hand over. Most of those
+assertions are about paths the code must *not* touch — a nested directory, the
+sketchbook root, an unrelated project, a prefix lookalike like `~/ArtStuff`.
+
+Two rules for anything you add there:
+
+- **A test may never touch the real machine.** `sandbox` in `tests/lib.sh`
+  builds a throwaway `HOME` and `ART_HOME` and stubs `hyprctl`, `art` and the
+  agent lookup. If a test needs something else from the system, stub it too.
+- **Assert the negative.** When code writes outside its own directory, the
+  valuable test is the one proving it left everything else alone.
+
+The gap worth filling is a smoke test that scaffolds, serves and renders a
+piece — nothing currently covers the server, the palette or `install.sh`.
 
 ## Licensing
 

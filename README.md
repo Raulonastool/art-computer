@@ -180,7 +180,11 @@ Thin, and known to be:
   prompt.
 - **Tested on one machine.** Omarchy, Hyprland, Arch, single monitor. Nothing
   about multi-monitor or another compositor has been exercised.
-- **No test suite.** Correctness so far is "it ran on my laptop."
+- **Thin test coverage.** `./tests/run` covers the code that writes to
+  `~/.claude.json` — the riskiest thing here, since that file is another tool's
+  — and syntax-checks every script. The server, the palette, the scaffold and
+  the install path have no tests; for those, correctness is still "it ran on my
+  laptop."
 - **Slugs are naive.** `slug_from_prompt` takes the first three words that
   survive a small stopword list, so *"a murmuration of starlings at dusk"*
   becomes `murmuration-starlings-at`, dangling preposition and all.
@@ -203,8 +207,8 @@ Candidates rather than commitments, roughly in the order they would pay off:
    would remove the one manual step in the loop.
 4. **Better slugs**, and a `--name` escape hatch for when the generated one is
    wrong.
-5. **A smoke test** that scaffolds, serves, and renders a piece in CI, so
-   "it ran on my laptop" stops being the standard.
+5. **A smoke test in CI** that scaffolds, serves and renders a piece, covering
+   the parts `./tests/run` does not reach.
 
 Issues and pull requests are welcome — see
 [CONTRIBUTING.md](CONTRIBUTING.md).
